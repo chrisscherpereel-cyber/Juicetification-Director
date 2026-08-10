@@ -27,10 +27,13 @@ the database schema for them is already in place, so they add on without rework.
 | File | Purpose |
 |---|---|
 | `director_app.py` | Streamlit UI, login, routing, admin console |
-| `director_db.py` | SQLite schema (all phases) + instructor/audit CRUD |
+| `director_db.py` | SQLite data layer + CRUD (uses the storage layer) |
+| `director_storage.py` | Encrypts the DB and syncs it to Dropbox |
 | `director_auth.py` | PBKDF2 password hashing & verification |
-| `requirements.txt` | Just `streamlit` |
-| `director.sqlite` | Created automatically on first run |
+| `requirements.txt` | `streamlit`, `dropbox`, `cryptography` |
+| `.streamlit/secrets.toml.example` | Template for your key + Dropbox credentials |
+| `.gitignore` | Keeps the DB file and secrets out of git |
+| `director.sqlite` | Local working copy (decrypted); the real copy lives in Dropbox |
 
 ## Run locally
 
@@ -42,21 +45,85 @@ streamlit run director_app.py
 
 Open the URL Streamlit prints, then create your Grand Director account.
 
+## Persistence: encrypted SQLite in Dropbox
+
+The database is a normal SQLite file, but its **source of truth is an encrypted
+copy in your Dropbox**. On start the app downloads and decrypts it to a local
+working file; after every write it re-encrypts the file and uploads it. Encryption
+is Fernet (AES-128-CBC + HMAC), so the file in Dropbox is unreadable and
+tamper-evident without your key.
+
+Mode is chosen automatically:
+
+- **No secrets set →** local file `director.sqlite` only. Fine for development, but
+  on cloud hosting it resets when the app rebuilds or sleeps.
+- **Key + Dropbox secrets set →** encrypted file in Dropbox. Instructors and all
+  data **persist** across restarts.
+
+The sidebar shows which mode is active (“🔒 … persistent” vs. “not persistent”).
+
+> **Single-writer design.** One synced file assumes about one writer at a time.
+> That fits this app: only the administrator and instructors ever write, and rarely
+> — students never touch this database. Run the Director as a single Streamlit app
+> to avoid two instances overwriting each other.
+
+### One-time setup
+
+**1. Make an encryption key** (keep it safe — lose it and the Dropbox copy can't be
+decrypted):
+
+```bash
+python -c "from director_storage import generate_key; print(generate_key())"
+```
+
+**2. Create a Dropbox app** at <https://www.dropbox.com/developers/apps> → *Scoped
+access* → *App folder* (simplest) → enable `files.content.read` and
+`files.content.write`. Note the **App key** and **App secret**.
+
+**3. Get a refresh token** (never expires). Visit this URL in a browser (replace
+`APP_KEY`), approve, copy the code:
+
+```
+https://www.dropbox.com/oauth2/authorize?client_id=APP_KEY&response_type=code&token_access_type=offline
+```
+
+Then exchange the code once:
+
+```bash
+curl https://api.dropboxapi.com/oauth2/token \
+  -d code=PASTE_CODE -d grant_type=authorization_code \
+  -u APP_KEY:APP_SECRET
+```
+
+The JSON response contains `refresh_token`.
+
+**4. Put the values in secrets** — locally copy `.streamlit/secrets.toml.example`
+to `.streamlit/secrets.toml` (git-ignored) and fill in; on Streamlit Community
+Cloud paste the same lines into **App → Settings → Secrets**:
+`DB_ENCRYPTION_KEY`, `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`,
+`DROPBOX_REFRESH_TOKEN`, and optionally `DROPBOX_DB_PATH`.
+
+No schema step — the app creates its tables and the first encrypted file on first
+run.
+
 ## Deploy on Streamlit Community Cloud
 
-Push this folder to a repo and point a new Streamlit app at `director_app.py`.
+Push this folder to a repo, point a new Streamlit app at `director_app.py`, and add
+the secrets above. `requirements.txt` includes `dropbox` and `cryptography`, both of
+which install from prebuilt wheels — no compiler needed. If a package is missing or
+a secret is malformed, the app shows a clear message instead of crashing.
 
-**One caveat about data persistence:** Community Cloud's filesystem is ephemeral —
-`director.sqlite` resets when the app is rebuilt or sleeps for a long stretch. That's
-fine for trying it out. For a durable roster of instructors you'll want a hosted
-database (Postgres/Supabase); the data layer is isolated in `director_db.py`, so
-that swap is contained to one file. This matches the "shared store" decision noted
-in the plan.
+**Do not commit** `director.sqlite` or `.streamlit/secrets.toml` — both are already
+in `.gitignore`.
 
-## Security notes
+## Security notes (protected information)
 
 - Passwords are never stored in clear — only PBKDF2-HMAC-SHA256 hashes with a
   per-user salt and 200,000 iterations.
+- The database file is **encrypted at rest in Dropbox** with authenticated
+  encryption (Fernet/AES); a tampered file is rejected on decrypt.
+- The encryption key and Dropbox credentials live only in Streamlit secrets, never
+  in Dropbox and never in git (`.gitignore` covers `secrets.toml` and the DB file).
 - Email uniqueness is case-insensitive.
 - All database access uses parameterized queries.
 - Set a strong Grand Director password; that account controls the whole system.

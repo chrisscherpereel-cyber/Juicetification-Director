@@ -21,8 +21,6 @@ import director_auth as auth
 st.set_page_config(page_title="Juicetification Director", page_icon="🧃",
                    layout="centered")
 
-db.init_db()
-
 # ----------------------------------------------------------------------------
 # Session helpers
 # ----------------------------------------------------------------------------
@@ -306,8 +304,7 @@ def screen_dashboard():
 
 
 def _all_apps():
-    with db.get_conn() as conn:
-        return conn.execute("SELECT * FROM apps ORDER BY name").fetchall()
+    return db.list_apps()
 
 
 # ----------------------------------------------------------------------------
@@ -327,10 +324,43 @@ def sidebar():
         st.divider()
         if st.button("Sign out", use_container_width=True):
             sign_out()
+        st.divider()
+        if db.USE_DROPBOX:
+            st.caption(f"🔒 {db.backend_name()} · persistent")
+        else:
+            st.caption("💾 Local SQLite · not persistent on cloud hosting")
     return choice
 
 
+def screen_storage_error(err):
+    st.title("🧃 Juicetification Director")
+    st.error(
+        "The encrypted-Dropbox persistence is configured but not usable yet, so "
+        "the app can't reach its database."
+    )
+    st.markdown(
+        "**How to fix:**\n\n"
+        "1. Make sure `dropbox` and `cryptography` are installed (they're in "
+        "`requirements.txt` by default) and redeploy.\n"
+        "2. Check your secrets: `DB_ENCRYPTION_KEY` plus either "
+        "`DROPBOX_REFRESH_TOKEN` + `DROPBOX_APP_KEY` + `DROPBOX_APP_SECRET`, or "
+        "`DROPBOX_ACCESS_TOKEN`.\n"
+        "3. To run locally without Dropbox, remove those secrets (note: the local "
+        "file isn't persistent on cloud hosting)."
+    )
+    with st.expander("Technical detail"):
+        st.code(err or "unknown error")
+
+
 def main():
+    # Fail clearly if persistence is half-configured or a package is missing.
+    ok, err = db.storage_status()
+    if not ok:
+        screen_storage_error(err)
+        return
+
+    db.init_db()  # idempotent; safe to call on every run
+
     # Not signed in → first-run setup or login.
     if not current_user():
         if not db.any_admin_exists():

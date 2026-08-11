@@ -22,9 +22,9 @@ def render_applications(user):
 
     _overview()
     st.divider()
-    _edit_existing()
+    _edit_existing(user)
     st.divider()
-    _add_new()
+    _add_new(user)
 
 
 def _overview():
@@ -43,7 +43,7 @@ def _overview():
     st.dataframe(table, use_container_width=True, hide_index=True)
 
 
-def _edit_existing():
+def _edit_existing(user):
     st.subheader("Edit an application")
     apps = apps_mod.list_apps()
     if not apps:
@@ -106,7 +106,7 @@ def _edit_existing():
                     st.error(err)
 
 
-def _add_new():
+def _add_new(user):
     st.subheader("Add a new application")
     with st.form("add_app", clear_on_submit=False):
         c1, c2 = st.columns(2)

@@ -1,0 +1,11 @@
+# Never commit the database or secrets.
+director.sqlite
+director.sqlite-wal
+director.sqlite-shm
+*.sqlite
+.streamlit/secrets.toml
+ 
+# Python
+__pycache__/
+*.pyc
+.venv/

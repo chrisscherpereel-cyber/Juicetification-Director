@@ -19,6 +19,17 @@ import director_manifests as manifests
 _STATUS_BADGE = {"draft": "⚪ draft", "open": "🟢 open", "closed": "🔴 closed"}
 
 
+def _score_str(score_json):
+    if not score_json:
+        return "—"
+    try:
+        import json as _json
+        v = _json.loads(score_json)
+        return str(v)
+    except Exception:
+        return str(score_json)
+
+
 def render_games(user):
     st.header("Games")
     st.caption("Create a class instance from a saved configuration. Students open "
@@ -122,24 +133,43 @@ def _game_detail(user, g):
 
 def _tracking(g):
     st.markdown("**Attempts / completion tracking**")
-    st.caption("Record student completions here (session id + completion code from "
-               "the sim's finish screen). Auto-capture would require the shared-store "
-               "option; this roster works with the current self-contained links.")
+
+    # Automatic sync from Dropbox completion records, when configured.
+    if games.tracking_available():
+        cols = st.columns([1, 2])
+        if cols[0].button("🔄 Sync completions", key=f"sync_{g['id']}",
+                          use_container_width=True):
+            n, err = games.sync_completions(g)
+            if err:
+                st.error(err)
+            else:
+                st.success(f"Synced {n} completion record(s) from Dropbox.")
+            st.rerun()
+        cols[1].caption("Pulls each student's completion record (written when they "
+                        "finish the sim) into the roster below. Re-syncing updates "
+                        "existing rows rather than duplicating.")
+    else:
+        st.caption("Record completions manually below. (Automatic sync activates "
+                   "once the Dropbox + encryption secrets are set and the sims use "
+                   "student_store.)")
 
     attempts = games.list_attempts(g["id"])
     if attempts:
         st.dataframe(
             [{"Student": a["student_ref"] or "—", "Session": a["session_id"] or "—",
               "Completion code": a["completion_code"] or "—",
+              "Score": _score_str(a.get("score_json")),
               "Recorded": a["started_at"]} for a in attempts],
             use_container_width=True, hide_index=True)
         # CSV export
         buf = io.StringIO()
         w = csv.writer(buf)
-        w.writerow(["student_ref", "session_id", "completion_code", "recorded_at"])
+        w.writerow(["student_ref", "session_id", "completion_code", "score",
+                    "recorded_at"])
         for a in attempts:
             w.writerow([a["student_ref"] or "", a["session_id"] or "",
-                        a["completion_code"] or "", a["started_at"]])
+                        a["completion_code"] or "", _score_str(a.get("score_json")),
+                        a["started_at"]])
         st.download_button("⬇ Export attempts CSV", data=buf.getvalue(),
                            file_name=f"{g['join_code']}_attempts.csv",
                            mime="text/csv", key=f"csv_{g['id']}")

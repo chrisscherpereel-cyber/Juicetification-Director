@@ -22,8 +22,10 @@ the database schema for them is already in place, so they add on without rework.
   students just open it — no login on their end. Games freeze a copy of the config,
   so editing the preset later never changes a running class. Seed policy chooses a
   unique scenario per student or one fixed scenario for everyone.
-- **Tracking** — per-game roster to record session ids and completion codes, with
-  CSV export.
+- **Tracking** — per-game roster of attempts with CSV export. When the sims use
+  `student_store` (per-student progress) and the Dropbox secrets are set, a **Sync
+  completions** button pulls each student's completion record automatically;
+  re-syncing updates rows instead of duplicating. Manual entry stays as a fallback.
 - **Activity log** of every access-control action.
 
 ## Files
@@ -36,7 +38,8 @@ the database schema for them is already in place, so they add on without rework.
 | `director_auth.py` | PBKDF2 password hashing & verification |
 | `director_manifests.py` | Each app's parameter schema (drives config forms + links) |
 | `director_config.py` | Saved-configuration CRUD |
-| `director_games.py` | Games, join codes, launch links, QR, attempts |
+| `director_games.py` | Games, join codes, launch links, QR, attempts, completion sync |
+| `student_store.py` | Shared with the sims; reads completion records for auto-tracking |
 | `ui_configurations.py` / `ui_games.py` | The Configurations and Games pages |
 | `requirements.txt` | `streamlit`, `dropbox`, `cryptography`, `qrcode` |
 | `.streamlit/secrets.toml.example` | Template for your key + Dropbox credentials |
@@ -152,7 +155,5 @@ in `.gitignore`.
 2. ✅ Configurations — schema-driven forms per app, saved as named presets
 3. ✅ Games — bind a config to a class, mint a join code, launch links + QR
 4. ✅ Sims consume the config via `juice_director.py` (done in the apps)
-5. ✅ Tracking — attempt roster + CSV export
-   - *Future:* automatic attempt capture (sims post completions back). This needs a
-     shared endpoint/store; the current self-contained links keep everything working
-     without one.
+5. ✅ Tracking — attempt roster + CSV export, plus **automatic completion sync** from
+   the sims' `student_store` records (Games → open a game → *Sync completions*).

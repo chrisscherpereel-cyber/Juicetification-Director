@@ -16,6 +16,11 @@ import director_db as db
 import director_config as config
 import director_manifests as manifests
 
+try:
+    import student_store  # shared with the sims; reads completion records
+except Exception:  # module or its deps not present → auto-tracking disabled
+    student_store = None
+
 # Crockford-ish base32 without easily-confused characters (no I, L, O, U, 0, 1).
 _ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -144,3 +149,48 @@ def list_attempts(game_id):
 
 def delete_attempt(attempt_id):
     db.run("DELETE FROM attempts WHERE id=?", (attempt_id,))
+
+
+def upsert_attempt(game_id, student_ref, session_id, completion_code=None,
+                   score=None):
+    """Insert or update an attempt keyed by (game_id, session_id). Used when
+    syncing completion records so re-syncing updates rather than duplicates."""
+    db.run(
+        """INSERT INTO attempts
+           (game_id, student_ref, session_id, started_at, completed_at,
+            completion_code, score_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(game_id, session_id) DO UPDATE SET
+             student_ref=excluded.student_ref,
+             completed_at=excluded.completed_at,
+             completion_code=excluded.completion_code,
+             score_json=excluded.score_json""",
+        (game_id, student_ref, session_id, db.now_iso(),
+         db.now_iso() if completion_code else None, completion_code,
+         json.dumps(score) if score is not None else None),
+    )
+
+
+def tracking_available():
+    return bool(student_store and student_store.enabled())
+
+
+def sync_completions(game):
+    """Pull completion records from Dropbox for this game and upsert them into the
+    attempts roster. Returns (synced_count, error). No-op when unavailable."""
+    if not tracking_available():
+        return 0, "Automatic tracking isn't configured (needs the Dropbox secrets)."
+    try:
+        records = student_store.list_completions(game["join_code"])
+    except Exception as e:
+        return 0, f"Couldn't read completions: {e}"
+    n = 0
+    for rec in records:
+        sid = rec.get("student")
+        if not sid:
+            continue
+        upsert_attempt(game["id"], student_ref=sid, session_id=sid,
+                       completion_code=rec.get("completion_code"),
+                       score=rec.get("score"))
+        n += 1
+    return n, None

@@ -12,6 +12,7 @@ import json
 
 import director_db as db
 import director_manifests as manifests
+import director_apps as apps_mod
 
 
 def create_config(owner_id, app_key, name, description, params):
@@ -19,9 +20,9 @@ def create_config(owner_id, app_key, name, description, params):
     name = (name or "").strip()
     if not name:
         return False, "Please give the configuration a name."
-    man = manifests.get_manifest(app_key)
+    man = apps_mod.get_manifest(app_key)
     if not man:
-        return False, f"Unknown app '{app_key}'."
+        return False, f"'{app_key}' has no parameter schema yet."
     clean = manifests.validate_params(man, params)
     try:
         new_id = db.run_returning_id(
@@ -44,7 +45,7 @@ def update_config(config_id, name, description, params):
     cfg = get_config(config_id)
     if not cfg:
         return False, "Configuration not found."
-    man = manifests.get_manifest(cfg["app_key"])
+    man = apps_mod.get_manifest(cfg["app_key"])
     clean = manifests.validate_params(man, params)
     try:
         db.run(

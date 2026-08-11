@@ -202,7 +202,7 @@ def init_db() -> None:
         for app_key, name, base_url in APPS_SEED:
             conn.execute(
                 """INSERT INTO apps (app_key, name, base_url) VALUES (?, ?, ?)
-                   ON CONFLICT(app_key) DO UPDATE SET name=excluded.name""",
+                   ON CONFLICT(app_key) DO NOTHING""",
                 (app_key, name, base_url),
             )
 

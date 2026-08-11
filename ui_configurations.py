@@ -14,6 +14,7 @@ import streamlit as st
 import director_db as db
 import director_config as config
 import director_manifests as manifests
+import director_apps as apps_mod
 
 
 def _widget(app_key, key, spec, current):
@@ -49,7 +50,7 @@ def _widget(app_key, key, spec, current):
 
 
 def _render_form(app_key, initial):
-    man = manifests.get_manifest(app_key)
+    man = apps_mod.get_manifest(app_key)
     values = {}
     for group in manifests.groups(man):
         st.markdown(f"**{group}**")
@@ -68,7 +69,7 @@ def render_configurations(user):
     st.caption("Set the default values each simulation starts with, and save them "
                "as named presets you can reuse across classes.")
 
-    apps = [a for a in db.list_apps() if manifests.get_manifest(a["app_key"])]
+    apps = [a for a in db.list_apps() if apps_mod.get_manifest(a["app_key"])]
     if not apps:
         st.error("No simulation manifests are registered.")
         return
@@ -83,7 +84,7 @@ def render_configurations(user):
         st.session_state.pop("editing_config_id", None)
 
     initial = config.params_of(editing) if editing else manifests.defaults(
-        manifests.get_manifest(app_key))
+        apps_mod.get_manifest(app_key))
 
     st.divider()
     st.subheader("Edit configuration" if editing else "New configuration")

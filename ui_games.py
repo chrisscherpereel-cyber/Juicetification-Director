@@ -13,7 +13,7 @@ import streamlit as st
 import director_db as db
 import director_config as config
 import director_games as games
-import director_manifests as manifests
+import director_apps as apps_mod
 
 
 _STATUS_BADGE = {"draft": "⚪ draft", "open": "🟢 open", "closed": "🔴 closed"}
@@ -43,7 +43,7 @@ def render_games(user):
 
 def _new_game(user):
     st.subheader("New game")
-    apps = [a for a in db.list_apps() if manifests.get_manifest(a["app_key"])]
+    apps = [a for a in db.list_apps() if apps_mod.get_manifest(a["app_key"])]
     if not apps:
         st.error("No simulation manifests are registered.")
         return

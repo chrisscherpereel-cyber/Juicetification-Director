@@ -14,6 +14,10 @@ the database schema for them is already in place, so they add on without rework.
 - **Administrator console** — add instructors, disable/enable them, reset their
   password (forces a change at next login), promote to admin or demote, and remove
   accounts. The **last active administrator is protected**.
+- **Applications** (admin only) — rename the simulations, change their URLs, add new
+  simulations, and give a new app its parameter schema (manifest) by pasting JSON so
+  it's immediately usable in Configurations and Games. Renames and edits persist
+  across restarts; an app that's in use can't be deleted.
 - **Configurations** — pick a simulation and set its default values on a form built
   automatically from that app's manifest (grouped fields, range/choice validation).
   Save as named presets; edit (versioned), duplicate, archive, export/import JSON.
@@ -36,7 +40,9 @@ the database schema for them is already in place, so they add on without rework.
 | `director_db.py` | SQLite data layer + CRUD (uses the storage layer) |
 | `director_storage.py` | Encrypts the DB and syncs it to Dropbox |
 | `director_auth.py` | PBKDF2 password hashing & verification |
-| `director_manifests.py` | Each app's parameter schema (drives config forms + links) |
+| `director_manifests.py` | Built-in parameter schema for each app |
+| `director_apps.py` | Admin app catalog: rename/add/delete + manifest resolver |
+| `ui_apps.py` | The Applications admin page |
 | `director_config.py` | Saved-configuration CRUD |
 | `director_games.py` | Games, join codes, launch links, QR, attempts, completion sync |
 | `student_store.py` | Shared with the sims; reads completion records for auto-tracking |

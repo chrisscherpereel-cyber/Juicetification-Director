@@ -21,6 +21,7 @@ import director_config as config
 import director_games as games
 import ui_configurations
 import ui_games
+import ui_apps
 
 st.set_page_config(page_title="Juicetification Director", page_icon="🧃",
                    layout="centered")
@@ -340,7 +341,7 @@ def sidebar():
         st.divider()
         nav = ["Dashboard", "Configurations", "Games"]
         if u["role"] == "admin":
-            nav.append("Administrator")
+            nav += ["Applications", "Administrator"]
         choice = st.radio("Go to", nav, label_visibility="collapsed")
         st.divider()
         if st.button("Sign out", use_container_width=True):
@@ -402,6 +403,8 @@ def main():
     choice = sidebar()
     if choice == "Administrator" and is_admin():
         screen_admin_console()
+    elif choice == "Applications" and is_admin():
+        ui_apps.render_applications(current_user())
     elif choice == "Configurations":
         ui_configurations.render_configurations(current_user())
     elif choice == "Games":

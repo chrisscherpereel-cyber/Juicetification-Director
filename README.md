@@ -9,28 +9,36 @@ the database schema for them is already in place, so they add on without rework.
 ## What works now
 
 - **First-run setup** — the first time you open the app, it asks you to create the
-  Grand Director account. No secrets file to edit.
-- **Login / logout** with PBKDF2 password hashing (standard library — no extra
-  packages to install).
+  Grand Director account.
+- **Login / logout** with PBKDF2 password hashing (standard library).
 - **Administrator console** — add instructors, disable/enable them, reset their
   password (forces a change at next login), promote to admin or demote, and remove
-  accounts. The **last active administrator is protected** and can't be removed,
-  demoted, or disabled.
-- **Forced password change** when an account is created or reset with a temporary
-  password.
+  accounts. The **last active administrator is protected**.
+- **Configurations** — pick a simulation and set its default values on a form built
+  automatically from that app's manifest (grouped fields, range/choice validation).
+  Save as named presets; edit (versioned), duplicate, archive, export/import JSON.
+- **Games** — bind a saved configuration to a class, mint a short **join code**, and
+  get a **launch link + QR**. The settings travel inside the link (`?cfg=…`), so
+  students just open it — no login on their end. Games freeze a copy of the config,
+  so editing the preset later never changes a running class. Seed policy chooses a
+  unique scenario per student or one fixed scenario for everyone.
+- **Tracking** — per-game roster to record session ids and completion codes, with
+  CSV export.
 - **Activity log** of every access-control action.
-- **Instructor dashboard** placeholder listing the five apps, ready for the
-  configuration and game phases.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `director_app.py` | Streamlit UI, login, routing, admin console |
+| `director_app.py` | Streamlit UI: login, routing, dashboard, admin console |
 | `director_db.py` | SQLite data layer + CRUD (uses the storage layer) |
 | `director_storage.py` | Encrypts the DB and syncs it to Dropbox |
 | `director_auth.py` | PBKDF2 password hashing & verification |
-| `requirements.txt` | `streamlit`, `dropbox`, `cryptography` |
+| `director_manifests.py` | Each app's parameter schema (drives config forms + links) |
+| `director_config.py` | Saved-configuration CRUD |
+| `director_games.py` | Games, join codes, launch links, QR, attempts |
+| `ui_configurations.py` / `ui_games.py` | The Configurations and Games pages |
+| `requirements.txt` | `streamlit`, `dropbox`, `cryptography`, `qrcode` |
 | `.streamlit/secrets.toml.example` | Template for your key + Dropbox credentials |
 | `.gitignore` | Keeps the DB file and secrets out of git |
 | `director.sqlite` | Local working copy (decrypted); the real copy lives in Dropbox |
@@ -128,10 +136,23 @@ in `.gitignore`.
 - All database access uses parameterized queries.
 - Set a strong Grand Director password; that account controls the whole system.
 
-## Roadmap (from the plan)
+## Typical workflow
 
-1. ✅ Foundation + access control (this build)
-2. Configurations — schema-driven forms per app, saved as named presets
-3. Games — bind a config to a class, mint a join code, launch links + QR
-4. Wire the join code into each sim via `juice_director.py`
-5. Tracking — attempts, completion codes, CSV export
+1. **Administrator** signs in and adds instructor accounts.
+2. An **instructor** opens **Configurations**, picks a simulation, sets its default
+   values, and saves a named preset.
+3. On **Games**, they create a game from that preset, set the seed policy, and share
+   the **launch link or QR** (and/or the join code) with their class.
+4. Students open the link — the sim starts on the instructor's values. Instructors
+   record completion codes on the game's tracking roster and export CSV.
+
+## Roadmap
+
+1. ✅ Foundation + access control
+2. ✅ Configurations — schema-driven forms per app, saved as named presets
+3. ✅ Games — bind a config to a class, mint a join code, launch links + QR
+4. ✅ Sims consume the config via `juice_director.py` (done in the apps)
+5. ✅ Tracking — attempt roster + CSV export
+   - *Future:* automatic attempt capture (sims post completions back). This needs a
+     shared endpoint/store; the current self-contained links keep everything working
+     without one.

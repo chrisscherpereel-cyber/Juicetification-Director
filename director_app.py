@@ -17,9 +17,15 @@ import streamlit as st
 
 import director_db as db
 import director_auth as auth
+import director_config as config
+import director_games as games
+import ui_configurations
+import ui_games
 
 st.set_page_config(page_title="Juicetification Director", page_icon="🧃",
                    layout="centered")
+
+_STATUS = {"draft": "⚪", "open": "🟢", "closed": "🔴"}
 
 # ----------------------------------------------------------------------------
 # Session helpers
@@ -275,20 +281,35 @@ def screen_admin_console():
 def screen_dashboard():
     u = current_user()
     st.header(f"Welcome, {u['name'].split()[0] if u['name'] else 'there'}")
-    st.caption("Your simulations at a glance.")
+
+    my_configs = config.list_configs(u["id"])
+    my_games = games.list_games(u["id"])
+    open_games = [g for g in my_games if g["status"] == "open"]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Saved configurations", len(my_configs))
+    m2.metric("Games", len(my_games))
+    m3.metric("Open now", len(open_games))
+
+    st.divider()
+    st.caption("The five simulations")
     apps = [dict(r) for r in _all_apps()]
     cols = st.columns(len(apps))
     for col, app in zip(cols, apps):
         with col:
             st.markdown(f"**{app['name']}**")
             st.caption(app["app_key"].upper())
-    st.divider()
-    st.info(
-        "**Coming next:** build configurations (default values) for each "
-        "simulation, then create games with join codes for your classes. "
-        "Access control is live now — configuration and game setup are the "
-        "next phases."
-    )
+
+    if my_games:
+        st.divider()
+        st.caption("Recent games")
+        for g in my_games[:5]:
+            st.markdown(f"- {_STATUS.get(g['status'], g['status'])} **{g['title']}** "
+                        f"· {g['app_name']} · code `{g['join_code']}`")
+    else:
+        st.divider()
+        st.info("Start on the **Configurations** page to set a simulation's default "
+                "values, then create a **Game** to get a join code for your class.")
+
     with st.expander("Change my password"):
         with st.form("self_pw"):
             pw = st.text_input("New password", type="password")
@@ -317,7 +338,7 @@ def sidebar():
         st.write(f"**{u['name']}**")
         st.caption("Grand Director" if u["role"] == "admin" else "Instructor")
         st.divider()
-        nav = ["Dashboard"]
+        nav = ["Dashboard", "Configurations", "Games"]
         if u["role"] == "admin":
             nav.append("Administrator")
         choice = st.radio("Go to", nav, label_visibility="collapsed")
@@ -381,6 +402,10 @@ def main():
     choice = sidebar()
     if choice == "Administrator" and is_admin():
         screen_admin_console()
+    elif choice == "Configurations":
+        ui_configurations.render_configurations(current_user())
+    elif choice == "Games":
+        ui_games.render_games(current_user())
     else:
         screen_dashboard()
 

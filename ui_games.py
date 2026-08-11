@@ -1,0 +1,159 @@
+"""
+ui_games.py — the Games page: create a game from a saved config, get its join
+code / launch link / QR, manage status, and track attempts.
+"""
+
+from __future__ import annotations
+
+import io
+import csv
+
+import streamlit as st
+
+import director_db as db
+import director_config as config
+import director_games as games
+import director_manifests as manifests
+
+
+_STATUS_BADGE = {"draft": "⚪ draft", "open": "🟢 open", "closed": "🔴 closed"}
+
+
+def render_games(user):
+    st.header("Games")
+    st.caption("Create a class instance from a saved configuration. Students open "
+               "the launch link or scan the QR — the settings travel in the link, "
+               "so no login is needed on their end.")
+
+    _new_game(user)
+    st.divider()
+    _list_games(user)
+
+
+def _new_game(user):
+    st.subheader("New game")
+    apps = [a for a in db.list_apps() if manifests.get_manifest(a["app_key"])]
+    if not apps:
+        st.error("No simulation manifests are registered.")
+        return
+    app_labels = {f'{a["name"]} ({a["app_key"].upper()})': a["app_key"] for a in apps}
+    chosen = st.selectbox("Simulation", list(app_labels.keys()), key="game_app")
+    app_key = app_labels[chosen]
+
+    cfgs = config.list_configs(user["id"], app_key=app_key)
+    if not cfgs:
+        st.info("You have no saved configuration for this simulation yet. "
+                "Create one on the **Configurations** page first.")
+        return
+
+    with st.form("new_game"):
+        cfg_labels = {f'{c["name"]} (v{c["version"]})': c["id"] for c in cfgs}
+        cfg_label = st.selectbox("Configuration", list(cfg_labels.keys()))
+        title = st.text_input("Game title", placeholder="MGT 3350 · Sec 001 · Fall 26")
+        c1, c2 = st.columns(2)
+        seed_policy = c1.selectbox(
+            "Scenario seed", ["per_student", "fixed", "per_section"],
+            format_func=lambda s: {"per_student": "Unique per student (default)",
+                                   "fixed": "Fixed — everyone gets the same",
+                                   "per_section": "Per section"}[s])
+        fixed_seed = c2.number_input("Fixed seed", min_value=1, value=1000, step=1,
+                                     disabled=(seed_policy != "fixed"))
+        submitted = st.form_submit_button("Create game", type="primary")
+    if submitted:
+        ok, res = games.create_game(
+            user["id"], app_key, cfg_labels[cfg_label], title,
+            seed_policy=seed_policy,
+            fixed_seed=fixed_seed if seed_policy == "fixed" else None)
+        if ok:
+            db.log_action(user["id"], "create_game", f"game:{res}")
+            st.success("Game created. Open it below to get the link and QR.")
+            st.rerun()
+        else:
+            st.error(res)
+
+
+def _list_games(user):
+    st.subheader("Your games")
+    rows = games.list_games(user["id"])
+    if not rows:
+        st.caption("No games yet.")
+        return
+    for g in rows:
+        badge = _STATUS_BADGE.get(g["status"], g["status"])
+        with st.expander(f"{badge} · {g['title']} · {g['app_name']} · "
+                         f"code {g['join_code']}"):
+            _game_detail(user, g)
+
+
+def _game_detail(user, g):
+    url = games.launch_url(g)
+    st.markdown(f"**Join code:** `{g['join_code']}`  ·  "
+                f"**Config:** {g['config_name'] or '—'}  ·  "
+                f"**Seed:** {g['seed_policy']}"
+                + (f" ({g['fixed_seed']})" if g['seed_policy'] == 'fixed' else ""))
+    st.text_input("Launch link", value=url, key=f"url_{g['id']}")
+    cols = st.columns([1, 2])
+    with cols[0]:
+        try:
+            st.markdown(games.qr_svg(url), unsafe_allow_html=True)
+        except Exception:
+            st.caption("(QR needs the `qrcode` package.)")
+    with cols[1]:
+        st.caption("Status")
+        s1, s2, s3 = st.columns(3)
+        if s1.button("Open", key=f"open_{g['id']}", use_container_width=True):
+            games.set_status(g["id"], "open"); st.rerun()
+        if s2.button("Close", key=f"close_{g['id']}", use_container_width=True):
+            games.set_status(g["id"], "closed"); st.rerun()
+        if s3.button("Draft", key=f"draft_{g['id']}", use_container_width=True):
+            games.set_status(g["id"], "draft"); st.rerun()
+        st.caption("Note: links are self-contained, so 'closed' is an organizational "
+                   "label — it doesn't disable an already-shared link.")
+        with st.popover("Delete game", use_container_width=True):
+            st.warning("Delete this game and its attempt records?")
+            if st.button("Yes, delete", key=f"delg_{g['id']}"):
+                games.delete_game(g["id"])
+                db.log_action(user["id"], "delete_game", f"game:{g['id']}")
+                st.rerun()
+
+    st.divider()
+    _tracking(g)
+
+
+def _tracking(g):
+    st.markdown("**Attempts / completion tracking**")
+    st.caption("Record student completions here (session id + completion code from "
+               "the sim's finish screen). Auto-capture would require the shared-store "
+               "option; this roster works with the current self-contained links.")
+
+    attempts = games.list_attempts(g["id"])
+    if attempts:
+        st.dataframe(
+            [{"Student": a["student_ref"] or "—", "Session": a["session_id"] or "—",
+              "Completion code": a["completion_code"] or "—",
+              "Recorded": a["started_at"]} for a in attempts],
+            use_container_width=True, hide_index=True)
+        # CSV export
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["student_ref", "session_id", "completion_code", "recorded_at"])
+        for a in attempts:
+            w.writerow([a["student_ref"] or "", a["session_id"] or "",
+                        a["completion_code"] or "", a["started_at"]])
+        st.download_button("⬇ Export attempts CSV", data=buf.getvalue(),
+                           file_name=f"{g['join_code']}_attempts.csv",
+                           mime="text/csv", key=f"csv_{g['id']}")
+    else:
+        st.caption("No attempts recorded yet.")
+
+    with st.form(f"add_attempt_{g['id']}", clear_on_submit=True):
+        a1, a2, a3 = st.columns(3)
+        sref = a1.text_input("Student (name or id)")
+        sess = a2.text_input("Session id")
+        code = a3.text_input("Completion code")
+        if st.form_submit_button("Record attempt"):
+            ok, err = games.add_attempt(g["id"], sref, sess, code, completed=bool(code))
+            if ok:
+                st.rerun()
+            else:
+                st.error(err)

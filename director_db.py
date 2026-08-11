@@ -103,6 +103,14 @@ def run(sql, params=()):
         conn.execute(sql, params)
 
 
+def run_returning_id(sql, params=()):
+    """Execute an INSERT and return the new row id."""
+    with get_conn(write=True) as conn:
+        cur = conn.execute(sql, params)
+        rid = cur.lastrowid
+    return rid
+
+
 # ---------------------------------------------------------------------------
 # Schema — executed statement by statement so it works on both drivers
 # (libSQL does not implement executescript).
@@ -226,6 +234,10 @@ def recent_audit(limit=100):
 # ---------------------------------------------------------------------------
 def list_apps():
     return q_all("SELECT * FROM apps ORDER BY name")
+
+
+def get_app(app_key):
+    return q_one("SELECT * FROM apps WHERE app_key = ?", (app_key,))
 
 
 # ---------------------------------------------------------------------------

@@ -2,3 +2,5 @@ streamlit>=1.36
 # Persistence = an encrypted SQLite file synced to Dropbox.
 dropbox>=11.36
 cryptography>=42.0
+# Join-code QR images (SVG, no Pillow needed).
+qrcode>=7.4

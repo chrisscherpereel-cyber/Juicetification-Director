@@ -60,11 +60,35 @@ def create_game(owner_id, app_key, config_id, title,
          opens_at, closes_at, seed_policy,
          int(fixed_seed) if fixed_seed else None, db.now_iso()),
     )
+    publish_config(get_game(new_id))  # so ?game=CODE links can resolve
     return True, new_id
+
+
+def short_links_enabled():
+    """True when the config store is reachable, so links can be just ?game=CODE."""
+    return bool(student_store and student_store.enabled())
+
+
+def publish_config(game):
+    """Publish a game's frozen config to the store, keyed by join code, so a short
+    ?game=<code> link resolves. No-op when the store isn't configured."""
+    if not short_links_enabled() or not game:
+        return False
+    try:
+        params = json.loads(game["config_snapshot"])
+        seed = game.get("fixed_seed") if game.get("seed_policy") == "fixed" else None
+        return student_store.save_game_config(
+            game["join_code"],
+            {"params": params, "seed": seed, "seed_policy": game.get("seed_policy")},
+        )
+    except Exception:
+        return False
 
 
 def set_status(game_id, status):
     db.run("UPDATE games SET status=? WHERE id=?", (status, game_id))
+    if status == "open":
+        publish_config(get_game(game_id))  # ensure the short link resolves
 
 
 def delete_game(game_id):
@@ -100,13 +124,27 @@ def launch_url(game, section=None):
     if not base:
         app = db.get_app(game["app_key"])
         base = app["base_url"] if app else ""
+    sep = "" if base.endswith("/") else "/"
+    code = game.get("join_code")
+
+    # Short link: when the config store is reachable, the config lives in Dropbox
+    # keyed by join code, so the link only needs ?game=CODE. The sims fetch it.
+    if short_links_enabled() and code:
+        query = ["game=" + str(code)]
+        if section:
+            query.append("sec=" + str(section))
+        return f"{base}{sep}?" + "&".join(query)
+
+    # Fallback: self-contained link that carries the whole config in the URL.
     params = json.loads(game["config_snapshot"])
-    query = ["cfg=" + manifests.encode_cfg(params)]
+    query = []
+    if code:
+        query.append("game=" + str(code))
+    query.append("cfg=" + manifests.encode_cfg(params))
     if game.get("seed_policy") == "fixed" and game.get("fixed_seed"):
         query.append("seed=" + str(game["fixed_seed"]))
     if section:
         query.append("sec=" + str(section))
-    sep = "" if base.endswith("/") else "/"
     return f"{base}{sep}?" + "&".join(query)
 
 

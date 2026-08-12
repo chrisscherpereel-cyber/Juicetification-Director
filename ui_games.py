@@ -33,8 +33,11 @@ def _score_str(score_json):
 def render_games(user):
     st.header("Games")
     st.caption("Create a class instance from a saved configuration. Students open "
-               "the launch link or scan the QR — the settings travel in the link, "
-               "so no login is needed on their end.")
+               "the launch link or scan the QR — no login needed on their end.")
+    if games.short_links_enabled():
+        st.caption("🔗 Short links are on: the config is stored in Dropbox by join "
+                   "code, so links are just `…?game=CODE`. (Each sim must fetch by "
+                   "code — see the setup note.)")
 
     _new_game(user)
     st.divider()

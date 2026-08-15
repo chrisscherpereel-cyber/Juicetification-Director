@@ -32,9 +32,13 @@ the database schema for them is already in place, so they add on without rework.
   plain-English summary of what students will experience. Games freeze a copy of the
   config, so editing a preset later never changes a running class. Seed policy chooses
   a unique scenario per student or one fixed scenario for everyone.
-- **Tracking** — per-game roster of attempts with CSV export. When the sims use
-  `student_store` (per-student progress) and the Dropbox secrets are set, a **Sync
-  completions** button pulls each student's completion record automatically;
+- **Live engagement** — when the sims use `student_store` and Dropbox is configured,
+  each game shows a **Started / In progress / Completed** summary and a per-student
+  table with percent complete, current step, score, and last-active time, refreshed on
+  demand. (Requires the one-line engagement change in each sim — see the engagement
+  prompt.)
+- **Tracking** — per-game roster of attempts with CSV export and a **Sync
+  completions** button that pulls each student's completion record automatically;
   re-syncing updates rows instead of duplicating. Manual entry stays as a fallback.
 - **Activity log** of every access-control action.
 

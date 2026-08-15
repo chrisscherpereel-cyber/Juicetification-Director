@@ -161,7 +161,38 @@ def _game_detail(user, g):
     _tracking(g)
 
 
+def _engagement(g):
+    st.markdown("**Live engagement**")
+    c1, c2 = st.columns([1, 3])
+    if c1.button("🔄 Refresh", key=f"eng_{g['id']}", use_container_width=True):
+        st.rerun()
+    c2.caption("Who has started, who's mid-way, and who's finished — read live from "
+               "each student's progress. Shows students once they open the sim.")
+    roster, summary = games.engagement(g)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Started", summary["started"])
+    m2.metric("In progress", summary["in_progress"])
+    m3.metric("Completed", summary["completed"])
+    if roster:
+        def _pct(p):
+            return f"{round(p * 100)}%" if isinstance(p, (int, float)) else "—"
+        st.dataframe(
+            [{"Student": r["student"] or "—",
+              "Status": "✅ done" if r["status"] == "completed" else "⏳ in progress",
+              "Progress": _pct(r.get("progress")),
+              "Step": r.get("step") or "—",
+              "Score": _score_str(json.dumps(r["score"]) if r.get("score") is not None else None),
+              "Last active": r.get("last_active") or "—"} for r in roster],
+            use_container_width=True, hide_index=True)
+    else:
+        st.caption("No students have opened this game yet.")
+    st.divider()
+
+
 def _tracking(g):
+    if games.tracking_available():
+        _engagement(g)
+
     st.markdown("**Attempts / completion tracking**")
 
     # Automatic sync from Dropbox completion records, when configured.

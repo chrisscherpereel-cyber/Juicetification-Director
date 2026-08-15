@@ -19,6 +19,11 @@ import os
 import re
 import json
 import hashlib
+from datetime import datetime, timezone
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _cfg(name, default=None):
@@ -158,11 +163,23 @@ def load(game, sid):
         return {}
 
 
-def save(game, sid, state):
+def save(game, sid, state, progress=None, step=None, score=None):
     if not ENABLED or not sid:
         return False
-    payload = json.dumps(state, separators=(",", ":")).encode()
-    _upload(_progress_path(game, sid), _fernet().encrypt(payload))
+    payload = dict(state)
+    payload["_student"] = sid
+    payload["_updated_at"] = _now_iso()
+    if progress is not None:
+        try:
+            payload["_progress"] = max(0.0, min(1.0, float(progress)))
+        except (TypeError, ValueError):
+            pass
+    if step is not None:
+        payload["_step"] = str(step)
+    if score is not None:
+        payload["_score"] = score
+    _upload(_progress_path(game, sid),
+            _fernet().encrypt(json.dumps(payload, separators=(",", ":")).encode()))
     return True
 
 
@@ -211,6 +228,29 @@ def list_completions(game):
             continue
         try:
             out.append(json.loads(_fernet().decrypt(raw).decode()))
+        except Exception:
+            pass
+    return out
+
+
+def list_progress(game):
+    if not ENABLED:
+        return []
+    folder = f"{PROGRESS_ROOT}/{game or 'nogame'}"
+    out = []
+    for path in _list_json(folder):
+        raw = _download(path)
+        if raw is None:
+            continue
+        try:
+            d = json.loads(_fernet().decrypt(raw).decode())
+            out.append({
+                "student": d.get("_student"),
+                "progress": d.get("_progress"),
+                "updated_at": d.get("_updated_at"),
+                "step": d.get("_step"),
+                "score": d.get("_score"),
+            })
         except Exception:
             pass
     return out

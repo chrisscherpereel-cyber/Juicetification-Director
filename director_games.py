@@ -236,6 +236,61 @@ def tracking_available():
     return bool(student_store and student_store.enabled())
 
 
+def engagement(game):
+    """Live per-student engagement for a game, merging progress files with
+    completion records. Returns (roster, summary).
+
+    roster: list of {student, status, progress, step, score, last_active}
+            status ∈ 'completed' | 'in_progress'
+    summary: {started, in_progress, completed}
+    Only students who have opened the sim appear (there is no class roster to
+    compare against, so 'not started' can't be shown)."""
+    if not tracking_available():
+        return [], {"started": 0, "in_progress": 0, "completed": 0}
+    try:
+        progress = student_store.list_progress(game["join_code"])
+        completions = student_store.list_completions(game["join_code"])
+    except Exception:
+        return [], {"started": 0, "in_progress": 0, "completed": 0}
+
+    done = {}
+    for c in completions:
+        s = c.get("student")
+        if s:
+            done[s] = c
+
+    by_student = {}
+    for p in progress:
+        s = p.get("student")
+        if not s:
+            continue
+        by_student[s] = {
+            "student": s,
+            "progress": p.get("progress"),
+            "step": p.get("step"),
+            "score": p.get("score"),
+            "last_active": p.get("updated_at"),
+        }
+    # fold in completions (a student may have a completion but be pruned progress)
+    for s, c in done.items():
+        row = by_student.setdefault(s, {"student": s, "progress": None, "step": None,
+                                        "score": None, "last_active": None})
+        row["score"] = c.get("score", row.get("score"))
+
+    roster = []
+    for s, row in by_student.items():
+        is_done = s in done or (row.get("progress") is not None and row["progress"] >= 1.0)
+        row["status"] = "completed" if is_done else "in_progress"
+        roster.append(row)
+    roster.sort(key=lambda r: (r["status"] != "in_progress", r["student"] or ""))
+
+    completed = sum(1 for r in roster if r["status"] == "completed")
+    summary = {"started": len(roster),
+               "in_progress": len(roster) - completed,
+               "completed": completed}
+    return roster, summary
+
+
 def sync_completions(game):
     """Pull completion records from Dropbox for this game and upsert them into the
     attempts roster. Returns (synced_count, error). No-op when unavailable."""

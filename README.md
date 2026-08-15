@@ -18,14 +18,20 @@ the database schema for them is already in place, so they add on without rework.
   simulations, and give a new app its parameter schema (manifest) by pasting JSON so
   it's immediately usable in Configurations and Games. Renames and edits persist
   across restarts; an app that's in use can't be deleted.
-- **Configurations** — pick a simulation and set its default values on a form built
-  automatically from that app's manifest (grouped fields, range/choice validation).
-  Save as named presets; edit (versioned), duplicate, archive, export/import JSON.
-- **Games** — bind a saved configuration to a class, mint a short **join code**, and
-  get a **launch link + QR**. The settings travel inside the link (`?cfg=…`), so
-  students just open it — no login on their end. Games freeze a copy of the config,
-  so editing the preset later never changes a running class. Seed policy chooses a
-  unique scenario per student or one fixed scenario for everyone.
+- **Configurations** — pick a simulation and set its values on a form built
+  automatically from that app's manifest. **Every field has a tooltip** explaining
+  what it does and how it changes the student experience, so no manual is needed. A
+  **“show only settings that differ from defaults”** toggle and a **Reset all to
+  defaults** button keep it uncluttered. Save as named presets; each preset shows a
+  plain-English summary of what it changed; edit (versioned), duplicate, archive,
+  export/import JSON.
+- **Games** — create a class instance in one step: choose a simulation and use
+  **Standard settings** (no pre-built configuration needed) or one of your saved
+  presets. Get a short **join code**, a **launch link + QR**, and an **“Open the
+  student view”** button to preview exactly what students see. Each game shows a
+  plain-English summary of what students will experience. Games freeze a copy of the
+  config, so editing a preset later never changes a running class. Seed policy chooses
+  a unique scenario per student or one fixed scenario for everyone.
 - **Tracking** — per-game roster of attempts with CSV export. When the sims use
   `student_store` (per-student progress) and the Dropbox secrets are set, a **Sync
   completions** button pulls each student's completion record automatically;

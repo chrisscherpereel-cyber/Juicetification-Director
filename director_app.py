@@ -308,8 +308,10 @@ def screen_dashboard():
                         f"· {g['app_name']} · code `{g['join_code']}`")
     else:
         st.divider()
-        st.info("Start on the **Configurations** page to set a simulation's default "
-                "values, then create a **Game** to get a join code for your class.")
+        st.info("**New here?** Go to **Games**, pick a simulation, and create one with "
+                "*Standard settings* — you'll get a join code and QR to share with your "
+                "class right away. Want to change how a simulation behaves first? Tune "
+                "it under **Configurations** (every field explains what it does).")
 
     with st.expander("Change my password"):
         with st.form("self_pw"):

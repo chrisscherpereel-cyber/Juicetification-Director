@@ -2,7 +2,9 @@
 ui_configurations.py — the Configurations page.
 
 Renders a form straight from each app's manifest, so adding a parameter to an app
-means adding one row to director_manifests.py — this UI updates itself.
+means adding one row to director_manifests.py — this UI updates itself. Fields carry
+tooltips (definition + student impact), can be filtered to just what differs from the
+defaults, and reset to defaults in one click.
 """
 
 from __future__ import annotations
@@ -18,56 +20,87 @@ import director_apps as apps_mod
 
 
 def _widget(app_key, key, spec, current):
-    """Render one manifest param as the right Streamlit widget; return its value."""
+    """Render one manifest param as the right Streamlit widget; return its value.
+    When the widget's state already exists (e.g. after Reset), we don't pass an
+    explicit value so Streamlit uses the state cleanly."""
     label = spec.get("label", key)
     wkey = f"cfg_{app_key}_{key}"
     t = spec["type"]
     help_bits = []
+    if spec.get("help"):
+        help_bits.append(spec["help"])
     if "min" in spec or "max" in spec:
-        help_bits.append(f"range {spec.get('min', '−∞')}–{spec.get('max', '∞')}")
-    help_txt = "; ".join(help_bits) or None
+        help_bits.append(f"(Range {spec.get('min', '−∞')}–{spec.get('max', '∞')}.)")
+    if "choices" in spec:
+        help_bits.append(f"(Options: {', '.join(str(c) for c in spec['choices'])}.)")
+    help_txt = " ".join(help_bits) or None
+    has_state = wkey in st.session_state
 
     if t == "bool":
-        return st.checkbox(label, value=bool(current), key=wkey, help=help_txt)
+        kw = {} if has_state else {"value": bool(current)}
+        return st.checkbox(label, key=wkey, help=help_txt, **kw)
     if t == "int":
+        kw = {} if has_state else {"value": int(current)}
         return int(st.number_input(
-            label, value=int(current), step=1,
+            label, step=1,
             min_value=int(spec["min"]) if "min" in spec else None,
             max_value=int(spec["max"]) if "max" in spec else None,
-            key=wkey, help=help_txt))
+            key=wkey, help=help_txt, **kw))
     if t == "float":
+        kw = {} if has_state else {"value": float(current)}
         return float(st.number_input(
-            label, value=float(current),
+            label,
             min_value=float(spec["min"]) if "min" in spec else None,
             max_value=float(spec["max"]) if "max" in spec else None,
-            key=wkey, help=help_txt))
+            key=wkey, help=help_txt, **kw))
     if t == "list":
-        txt = st.text_input(label, value=manifests.list_to_text(current),
-                            key=wkey, help="comma-separated values")
+        kw = {} if has_state else {"value": manifests.list_to_text(current)}
+        txt = st.text_input(label, key=wkey,
+                            help=(help_txt or "") + " Enter comma-separated values.",
+                            **kw)
         return manifests.parse_list_text(txt)
     # str
-    return st.text_input(label, value=str(current), key=wkey, help=help_txt)
+    kw = {} if has_state else {"value": str(current)}
+    return st.text_input(label, key=wkey, help=help_txt, **kw)
 
 
-def _render_form(app_key, initial):
+def _render_form(app_key, initial, only_changed=False):
     man = apps_mod.get_manifest(app_key)
-    values = {}
+    values = dict(initial)  # keep hidden fields at their current value
+    shown = 0
     for group in manifests.groups(man):
-        st.markdown(f"**{group}**")
         specs = [(k, s) for k, s in man["params"].items()
                  if s.get("group", "General") == group]
+        if only_changed:
+            specs = [(k, s) for k, s in specs
+                     if initial.get(k, s["default"]) != s["default"]]
+        if not specs:
+            continue
+        st.markdown(f"**{group}**")
         cols = st.columns(2)
         for i, (k, spec) in enumerate(specs):
             with cols[i % 2]:
-                values[k] = _widget(app_key, k, spec,
-                                    initial.get(k, spec["default"]))
+                values[k] = _widget(app_key, k, spec, initial.get(k, spec["default"]))
+                shown += 1
+    if only_changed and shown == 0:
+        st.caption("Nothing differs from the defaults yet. Turn off "
+                   "“only changed” to see every setting.")
     return values
+
+
+def _reset_to_defaults(app_key):
+    man = apps_mod.get_manifest(app_key)
+    for k, s in man["params"].items():
+        wkey = f"cfg_{app_key}_{k}"
+        d = s["default"]
+        st.session_state[wkey] = manifests.list_to_text(d) if s["type"] == "list" else d
 
 
 def render_configurations(user):
     st.header("Configurations")
-    st.caption("Set the default values each simulation starts with, and save them "
-               "as named presets you can reuse across classes.")
+    st.caption("Set the values a simulation starts with, then save them as a named "
+               "preset. Hover any field's ⓘ for what it does and how it changes the "
+               "student experience.")
 
     apps = [a for a in db.list_apps() if apps_mod.get_manifest(a["app_key"])]
     if not apps:
@@ -92,6 +125,15 @@ def render_configurations(user):
         st.caption(f"Editing **{editing['name']}** (version {editing['version']}). "
                    "Saving bumps the version; running games keep their frozen copy.")
 
+    # View controls live OUTSIDE the form (forms allow only submit buttons).
+    ctrl_a, ctrl_b = st.columns([2, 1])
+    only_changed = ctrl_a.toggle("Show only settings that differ from defaults",
+                                 key=f"onlych_{app_key}")
+    if ctrl_b.button("↺ Reset all to defaults", key=f"reset_{app_key}",
+                     use_container_width=True):
+        _reset_to_defaults(app_key)
+        st.rerun()
+
     with st.form(f"config_form_{app_key}"):
         c1, c2 = st.columns([1, 2])
         name = c1.text_input("Configuration name",
@@ -99,7 +141,7 @@ def render_configurations(user):
         desc = c2.text_input("Description (optional)",
                             value=editing["description"] if editing else "")
         st.divider()
-        values = _render_form(app_key, initial)
+        values = _render_form(app_key, initial, only_changed=only_changed)
         col_a, col_b = st.columns(2)
         save = col_a.form_submit_button(
             "Save changes" if editing else "Save configuration", type="primary")
@@ -130,6 +172,7 @@ def render_configurations(user):
 def _render_saved(user, app_key):
     st.divider()
     st.subheader("Saved configurations")
+    man = apps_mod.get_manifest(app_key)
     rows = config.list_configs(user["id"], app_key=app_key, include_archived=True)
     if not rows:
         st.caption("None yet for this simulation.")
@@ -138,10 +181,13 @@ def _render_saved(user, app_key):
         with st.container(border=True):
             top = st.columns([3, 1, 1, 1, 1])
             archived = " · archived" if cfg["is_archived"] else ""
-            top[0].markdown(f"**{cfg['name']}**  \n"
-                            f"<span style='color:gray'>v{cfg['version']}"
-                            f"{archived} · {cfg['description'] or 'no description'}"
-                            f"</span>", unsafe_allow_html=True)
+            summary = manifests.summarize_changes(man, config.params_of(cfg))
+            top[0].markdown(
+                f"**{cfg['name']}**  \n"
+                f"<span style='color:gray'>v{cfg['version']}{archived} · "
+                f"{cfg['description'] or 'no description'}</span>  \n"
+                f"<span style='color:#555'>🎛 {summary}</span>",
+                unsafe_allow_html=True)
             if top[1].button("Edit", key=f"edit_{cfg['id']}", use_container_width=True):
                 st.session_state["editing_config_id"] = cfg["id"]
                 st.rerun()
@@ -168,7 +214,6 @@ def _render_saved(user, app_key):
                     config.delete_config(cfg["id"])
                     db.log_action(user["id"], "delete_config", f"config:{cfg['id']}")
                     st.rerun()
-            # export
             st.download_button(
                 "⬇ Export JSON",
                 data=json.dumps({"app_key": cfg["app_key"], "name": cfg["name"],

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import csv
+import json
 
 import streamlit as st
 
@@ -14,6 +15,7 @@ import director_db as db
 import director_config as config
 import director_games as games
 import director_apps as apps_mod
+import director_manifests as manifests
 
 
 _STATUS_BADGE = {"draft": "⚪ draft", "open": "🟢 open", "closed": "🔴 closed"}
@@ -55,14 +57,23 @@ def _new_game(user):
     app_key = app_labels[chosen]
 
     cfgs = config.list_configs(user["id"], app_key=app_key)
-    if not cfgs:
-        st.info("You have no saved configuration for this simulation yet. "
-                "Create one on the **Configurations** page first.")
-        return
+    # No need to build a configuration first — "Standard settings" always works.
+    source_opts = ["Standard settings"]
+    if cfgs:
+        source_opts.append("A saved configuration")
+    source = st.radio("Settings to use", source_opts, horizontal=True,
+                      help="Standard settings run the simulation's built-in defaults. "
+                           "To customize, save a preset on the Configurations page.")
 
     with st.form("new_game"):
-        cfg_labels = {f'{c["name"]} (v{c["version"]})': c["id"] for c in cfgs}
-        cfg_label = st.selectbox("Configuration", list(cfg_labels.keys()))
+        cfg_id = None
+        if source == "A saved configuration":
+            cfg_labels = {f'{c["name"]} (v{c["version"]})': c["id"] for c in cfgs}
+            cfg_label = st.selectbox("Configuration", list(cfg_labels.keys()))
+            cfg_id = cfg_labels[cfg_label]
+        else:
+            st.caption("Every student starts on this simulation's standard settings. "
+                       "You can tune them later on the Configurations page.")
         title = st.text_input("Game title", placeholder="MGT 3350 · Sec 001 · Fall 26")
         c1, c2 = st.columns(2)
         seed_policy = c1.selectbox(
@@ -74,10 +85,15 @@ def _new_game(user):
                                      disabled=(seed_policy != "fixed"))
         submitted = st.form_submit_button("Create game", type="primary")
     if submitted:
-        ok, res = games.create_game(
-            user["id"], app_key, cfg_labels[cfg_label], title,
-            seed_policy=seed_policy,
-            fixed_seed=fixed_seed if seed_policy == "fixed" else None)
+        seed = fixed_seed if seed_policy == "fixed" else None
+        if cfg_id is not None:
+            ok, res = games.create_game(user["id"], app_key, cfg_id, title,
+                                        seed_policy=seed_policy, fixed_seed=seed)
+        else:
+            params = manifests.defaults(apps_mod.get_manifest(app_key))
+            ok, res = games.create_game_from_params(
+                user["id"], app_key, title, params,
+                seed_policy=seed_policy, fixed_seed=seed)
         if ok:
             db.log_action(user["id"], "create_game", f"game:{res}")
             st.success("Game created. Open it below to get the link and QR.")
@@ -105,7 +121,18 @@ def _game_detail(user, g):
                 f"**Config:** {g['config_name'] or '—'}  ·  "
                 f"**Seed:** {g['seed_policy']}"
                 + (f" ({g['fixed_seed']})" if g['seed_policy'] == 'fixed' else ""))
+    # Plain-English summary of what students will experience.
+    man = apps_mod.get_manifest(g["app_key"])
+    if man:
+        try:
+            summary = manifests.summarize_changes(man, json.loads(g["config_snapshot"]))
+            st.caption(f"🎛 What students get: {summary}")
+        except Exception:
+            pass
     st.text_input("Launch link", value=url, key=f"url_{g['id']}")
+    st.link_button("▶ Open the student view in a new tab", url,
+                   use_container_width=True,
+                   help="See exactly what a student sees before you share the link.")
     cols = st.columns([1, 2])
     with cols[0]:
         try:

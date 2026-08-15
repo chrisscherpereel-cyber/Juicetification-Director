@@ -64,6 +64,29 @@ def create_game(owner_id, app_key, config_id, title,
     return True, new_id
 
 
+def create_game_from_params(owner_id, app_key, title, params,
+                            seed_policy="per_student", fixed_seed=None):
+    """Create a game directly from a params dict, without needing a saved
+    configuration first (config_id stays null; the snapshot is the source)."""
+    title = (title or "").strip()
+    if not title:
+        return False, "Please give the game a title."
+    if seed_policy == "fixed" and not fixed_seed:
+        return False, "A fixed-seed game needs a seed number."
+    snapshot = json.dumps(params)
+    code = _unique_code()
+    new_id = db.run_returning_id(
+        """INSERT INTO games
+           (owner_id, app_key, config_id, config_snapshot, title, join_code,
+            status, seed_policy, fixed_seed, created_at)
+           VALUES (?, ?, NULL, ?, ?, ?, 'draft', ?, ?, ?)""",
+        (owner_id, app_key, snapshot, title, code, seed_policy,
+         int(fixed_seed) if fixed_seed else None, db.now_iso()),
+    )
+    publish_config(get_game(new_id))
+    return True, new_id
+
+
 def short_links_enabled():
     """True when the config store is reachable, so links can be just ?game=CODE."""
     return bool(student_store and student_store.enabled())

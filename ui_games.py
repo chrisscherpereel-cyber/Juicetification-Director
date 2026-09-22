@@ -119,7 +119,12 @@ def _list_games(user):
         badge = _STATUS_BADGE.get(g["status"], g["status"])
         with st.expander(f"{badge} · {g['title']} · {g['app_name']} · "
                          f"code {g['join_code']}"):
-            _game_detail(user, g)
+            # One misbehaving game must never hide the rest of the list.
+            try:
+                _game_detail(user, g)
+            except Exception as e:
+                st.error(f"Couldn't load this game's details: {e}")
+                st.caption(f"Join code `{g['join_code']}` · status {g['status']}.")
 
 
 def _game_detail(user, g):
@@ -170,12 +175,28 @@ def _game_detail(user, g):
 
 def _engagement(g):
     st.markdown("**Live engagement**")
+    # Load on demand — reading progress hits Dropbox, so we don't do it for every
+    # game on every page render (that made large game lists slow and fragile).
+    load_key = f"eng_load_{g['id']}"
+    if not st.session_state.get(load_key):
+        if st.button("Show live engagement", key=f"showeng_{g['id']}",
+                     use_container_width=True):
+            st.session_state[load_key] = True
+            st.rerun()
+        st.caption("Who has started, mid-way, or finished — loaded from storage on "
+                   "demand.")
+        return
     c1, c2 = st.columns([1, 3])
     if c1.button("🔄 Refresh", key=f"eng_{g['id']}", use_container_width=True):
         st.rerun()
-    c2.caption("Who has started, who's mid-way, and who's finished — read live from "
-               "each student's progress. Shows students once they open the sim.")
-    roster, summary = games.engagement(g)
+    c2.caption("Read live from each student's progress. Shows students once they "
+               "open the sim.")
+    try:
+        roster, summary = games.engagement(g)
+    except Exception as e:
+        st.warning(f"Couldn't load engagement right now: {e}")
+        st.divider()
+        return
     m1, m2, m3 = st.columns(3)
     m1.metric("Started", summary["started"])
     m2.metric("In progress", summary["in_progress"])

@@ -91,8 +91,12 @@ The sidebar shows which mode is active (“🔒 … persistent” vs. “not per
 
 > **Single-writer design.** One synced file assumes about one writer at a time.
 > That fits this app: only the administrator and instructors ever write, and rarely
-> — students never touch this database. Run the Director as a single Streamlit app
-> to avoid two instances overwriting each other.
+> — students never touch this database. To keep sessions consistent, the app
+> re-pulls the latest copy from Dropbox on each interaction, and forces a fresh pull
+> immediately before every write (read-modify-write), so changes made in another
+> browser, device, or session aren't overwritten. Only genuine simultaneous writes
+> from two instances within the same moment could still collide, so prefer running
+> the Director as a single app.
 
 ### One-time setup
 

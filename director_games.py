@@ -129,10 +129,12 @@ def get_game_by_code(code):
 
 def list_games(owner_id):
     return db.q_all(
-        """SELECT g.*, a.name AS app_name, a.base_url AS base_url,
+        """SELECT g.*,
+                  COALESCE(a.name, g.app_key) AS app_name,
+                  a.base_url AS base_url,
                   c.name AS config_name
            FROM games g
-           JOIN apps a ON a.app_key = g.app_key
+           LEFT JOIN apps a ON a.app_key = g.app_key
            LEFT JOIN configurations c ON c.id = g.config_id
            WHERE g.owner_id=?
            ORDER BY g.created_at DESC""",

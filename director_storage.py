@@ -141,17 +141,25 @@ def _remote_upload(ciphertext: bytes):
 # ---------------------------------------------------------------------------
 # Public API used by director_db.py
 # ---------------------------------------------------------------------------
-def ensure_local(db_path: str):
+def mark_stale():
+    """Force the next ensure_local to re-pull from Dropbox. Call once at the start
+    of each app interaction so reads reflect changes made in other sessions."""
+    global _pulled
+    _pulled = False
+
+
+def ensure_local(db_path: str, force: bool = False):
     """Make sure the local working file reflects the encrypted Dropbox copy.
-    No-op in local mode. Safe to call on every connection (pulls once per
-    process, and again if the local file has disappeared, e.g. after a restart)."""
+    No-op in local mode. Pulls when stale (or `force=True`, used right before a
+    write so the change is applied on top of the latest Dropbox state rather than a
+    stale local copy — this prevents overwriting games created in other sessions)."""
     global _pulled
     if not ENABLED:
         return
-    if _pulled and os.path.exists(db_path):
+    if not force and _pulled and os.path.exists(db_path):
         return
     with _lock:
-        if _pulled and os.path.exists(db_path):
+        if not force and _pulled and os.path.exists(db_path):
             return
         ciphertext = _remote_download()
         if ciphertext is not None:

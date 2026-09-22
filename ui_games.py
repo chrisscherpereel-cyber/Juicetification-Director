@@ -103,11 +103,18 @@ def _new_game(user):
 
 
 def _list_games(user):
-    st.subheader("Your games")
+    head = st.columns([3, 1])
+    head[0].subheader("Your games")
+    if head[1].button("🔄 Refresh", key="refresh_games", use_container_width=True,
+                      help="Re-pull the latest from storage (games created in other "
+                           "sessions or devices)."):
+        st.rerun()
     rows = games.list_games(user["id"])
     if not rows:
         st.caption("No games yet.")
         return
+    open_n = sum(1 for g in rows if g["status"] == "open")
+    st.caption(f"{len(rows)} game(s) · {open_n} open")
     for g in rows:
         badge = _STATUS_BADGE.get(g["status"], g["status"])
         with st.expander(f"{badge} · {g['title']} · {g['app_name']} · "

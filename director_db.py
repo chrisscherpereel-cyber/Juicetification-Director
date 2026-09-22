@@ -58,9 +58,27 @@ def now_iso() -> str:
 # Connection. In encrypted-Dropbox mode we pull the latest copy before opening
 # and push the re-encrypted file after a write.
 # ---------------------------------------------------------------------------
+def _file_hash(path):
+    import hashlib
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def refresh():
+    """Mark the Dropbox copy stale so the next read re-pulls. Call once per app
+    interaction so games/configs created in other sessions show up."""
+    storage.mark_stale()
+
+
 @contextmanager
 def get_conn(write=False):
-    storage.ensure_local(DB_PATH)
+    # Reads use the once-per-interaction pull; writes force a fresh pull so the
+    # change lands on top of the latest Dropbox state (no stale overwrite).
+    storage.ensure_local(DB_PATH, force=write and storage.ENABLED)
+    before = _file_hash(DB_PATH) if (write and storage.ENABLED) else None
     conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
     if storage.ENABLED:
         # Rollback journal keeps the DB a single self-contained file after each
@@ -77,7 +95,10 @@ def get_conn(write=False):
         conn.commit()
     finally:
         conn.close()
-    if write:
+    # Push only when the database actually changed, so read-only opens and no-op
+    # writes (e.g. init_db re-seeding) don't needlessly re-upload and widen the
+    # window for overwriting another session's changes.
+    if write and storage.ENABLED and _file_hash(DB_PATH) != before:
         storage.push(DB_PATH)
 
 

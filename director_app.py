@@ -383,7 +383,8 @@ def main():
         screen_storage_error(err)
         return
 
-    db.init_db()  # idempotent; safe to call on every run
+    db.refresh()   # re-pull from Dropbox so other sessions' changes are visible
+    db.init_db()   # idempotent; safe to call on every run
 
     # Not signed in → first-run setup or login.
     if not current_user():

@@ -34,6 +34,11 @@ APPS_SEED = [
     ("app",  "Aggregate Anxiety", "https://juicetification-aggregate.streamlit.app"),
     ("lean", "The Lean Rush",     "https://juicetification-lean.streamlit.app"),
     ("fcst", "Forecast Frenzy",   "https://juicetification-forecasting.streamlit.app"),
+    # Capacity Crush V3 is a separate catalog entry rather than a new URL on "toc", so existing
+    # configurations and games keep pointing at the app they were authored against. Seeding a new
+    # key works on an already-initialised database (the INSERT below is ON CONFLICT DO NOTHING,
+    # which would silently skip an edit to an existing row).
+    ("toc3", "Capacity Crush V3", "https://juicetification-capacity-crush-v3.streamlit.app"),
 ]
 
 

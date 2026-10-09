@@ -36,6 +36,13 @@ def _widget(app_key, key, spec, current):
     help_txt = " ".join(help_bits) or None
     has_state = wkey in st.session_state
 
+    if "choices" in spec:
+        # A constrained parameter must not be a free text box: juice_director._coerce silently
+        # falls back to the default when the typed value isn't an exact match, so a small typo
+        # would look accepted and quietly do nothing.
+        opts = list(spec["choices"])
+        kw = {} if has_state else {"index": opts.index(current) if current in opts else 0}
+        return st.selectbox(label, opts, key=wkey, help=help_txt, **kw)
     if t == "bool":
         kw = {} if has_state else {"value": bool(current)}
         return st.checkbox(label, key=wkey, help=help_txt, **kw)

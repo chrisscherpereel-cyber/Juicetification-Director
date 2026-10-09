@@ -203,6 +203,35 @@ MANIFESTS = {
 }
 
 
+# ---------------------------------------------------------------- TOC V3
+# Capacity Crush V3 is the same simulation and the same parameter schema as "toc", plus the run
+# length V3 added. Derived from the "toc" entry rather than copied so the shared 21 parameters
+# cannot drift between the two catalog entries.
+def _toc3_params():
+    out = {}
+    for key, spec in MANIFESTS["toc"]["params"].items():
+        out[key] = spec
+        if key == "simulation_years":          # keep run length next to the other timing control
+            out["horizon"] = {
+                "type": "str", "default": "Full year",
+                "choices": ["One shift (8 h)", "One week (40 h)", "Six weeks (240 h)", "Full year"],
+                "group": "Line", "label": "Run length",
+                "help": "How long each run lasts. A full year averages the dice out and shows the "
+                        "line's steady rate; a shift or a week shows the swings a real shop floor "
+                        "lives with. Challenges are always judged over a full year regardless of "
+                        "this setting, so a short run can never decide a pass.",
+            }
+    return out
+
+
+MANIFESTS["toc3"] = {
+    **MANIFESTS["toc"],
+    "app_key": "toc3",
+    "name": "Capacity Crush V3",
+    "params": _toc3_params(),
+}
+
+
 def get_manifest(app_key):
     return MANIFESTS.get(app_key)
 

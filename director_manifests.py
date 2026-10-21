@@ -232,6 +232,123 @@ MANIFESTS["toc3"] = {
 }
 
 
+# ---------------------------------------------------------------- APP V3
+# Aggregate Anxiety V3 (the Excel edition: students build the plans in their own workbook and
+# the app checks it). A separate catalog entry from "app", so existing configurations and games
+# keep launching the app they were authored against. Mirrors V3's manifest.py
+# (github.com/chrisscherpereel-cyber/Juicetification-Aggregate-Anxiety-V3): same keys, types,
+# defaults, limits and choices, in the same order. The 18 parameters shared with "app" reuse its
+# labels and help (safety stock's help changes: in V3 it applies only under the "maintain"
+# policy). Keep in sync when V3's manifest changes.
+def _app3_params():
+    app = MANIFESTS["app"]["params"]
+
+    def shared(key, **override):
+        return {**app[key], **override}
+
+    def new(t, default, group, label, help_, **extra):
+        return {"type": t, "default": default, **extra, "group": group, "label": label,
+                "help": help_}
+
+    return {
+        "beginning_inventory": shared("beginning_inventory"),
+        "beginning_backorders": new(
+            "int", 0, "Inventory", "Beginning backorders (bottles)",
+            "Customer orders still unfilled before January. They must be made on top of "
+            "January's demand and cost a backorder penalty while they wait. 0 = a clean start.",
+            min=0),
+        "safety_stock": shared(
+            "safety_stock", label="Safety stock (bottles)",
+            help="The cushion of bottles to keep on hand — used only when the safety-stock "
+                 "policy below is 'maintain' (it then becomes every chase month's ending "
+                 "target). Under 'none' it is ignored."),
+        "safety_stock_policy": new(
+            "str", "none", "Inventory", "Safety-stock policy",
+            "'none' (default): chase months end at 0 bottles. 'maintain': plans keep the "
+            "safety stock above on hand, which adds holding cost. Students can change it in "
+            "the sidebar unless 'Students set the policies' is off.",
+            choices=["none", "maintain"]),
+        "worker_policy": new(
+            "str", "whole", "Capacity", "Workforce policy",
+            "'whole' (default): whole workers only — round up and pay for idle capacity. "
+            "'partial': fractional workers, so capacity rises in small steps. Students can "
+            "change it in the sidebar unless 'Students set the policies' is off.",
+            choices=["whole", "partial"]),
+        "max_inventory": shared("max_inventory"),
+        "bottles_per_worker": shared("bottles_per_worker"),
+        "bottles_per_hour": shared("bottles_per_hour"),
+        "hours_per_day": shared("hours_per_day"),
+        "working_days": shared("working_days"),
+        "starting_workforce": shared("starting_workforce"),
+        "regular_labor_cost": shared("regular_labor_cost"),
+        "hiring_cost": shared("hiring_cost"),
+        "layoff_cost": shared("layoff_cost"),
+        "holding_cost": shared("holding_cost"),
+        "backorder_cost": shared("backorder_cost"),
+        "overtime_pct": shared("overtime_pct"),
+        "overtime_cost": shared("overtime_cost"),
+        "subcontract_cost": shared("subcontract_cost"),
+        "subcontract_capacity": new(
+            "int", 5000, "Capacity", "Subcontract capacity (bottles/month)",
+            "The most bottles the subcontractor can supply in a month (hybrid plan). Lower "
+            "makes peaks harder to cover without hiring or overtime.", min=0),
+        "service_requirement_pct": new(
+            "float", 95.0, "Policy", "Required on-time fulfillment (%)",
+            "A hybrid plan is feasible only if at least this share of orders ships on time. "
+            "0 = no requirement; 100 = no backorders at all.", min=0, max=100),
+        "terminal_backlog_max": new(
+            "int", 0, "Policy", "Backlog allowed at end of December (bottles)",
+            "How many unfilled orders a hybrid plan may leave at the end of the year. 0 = all "
+            "orders must be filled by December.", min=0),
+        "scenario_preset": new(
+            "str", "standard", "Scenario", "Scenario preset",
+            "A ready-made variation: stronger seasonality, stability favored (costly "
+            "hiring/layoffs), limited flexibility (less overtime/subcontracting) or tight "
+            "storage. It changes only the settings left at their defaults.",
+            choices=["standard", "strong_seasonal", "stability_favored", "limited_flex",
+                     "tight_storage"]),
+        "student_sets_policies": new(
+            "bool", True, "Pedagogy", "Students set the policies",
+            "On: students choose the safety-stock and workforce policies in the sidebar "
+            "(locked at their first submission). Off: everyone uses the policies set here."),
+        "hybrid_mode": new(
+            "str", "guided", "Pedagogy", "Hybrid plan",
+            "'guided' (default): students get a starting plan and questions that lead to a good "
+            "solution. 'build': they design the hybrid themselves. 'off': chase and level only. "
+            "Students can switch in the sidebar.",
+            choices=["guided", "build", "off"]),
+        "include_hybrid": new(
+            "bool", True, "Pedagogy", "Include the hybrid plan",
+            "Off removes the hybrid piece entirely (and from the comparison), whatever the "
+            "hybrid setting above says."),
+        "require_formulas": new(
+            "bool", True, "Pedagogy", "Require Excel formulas",
+            "On: a calculated cell must hold a formula — a typed number is marked 'typed, not "
+            "a formula'. Off: correct typed numbers are accepted."),
+        "min_justification_words": new(
+            "int", 50, "Pedagogy", "Minimum words in the justification",
+            "How long the written recommendation on the Summary sheet must be. 0 = no "
+            "minimum.", min=0, max=1000),
+        "assignment_name": new(
+            "str", "Aggregate Anxiety: Aggregate Planning in Excel", "Report",
+            "Assignment name",
+            "Shown at the top of the students' workbook, receipts and final report."),
+        "report_timezone": new(
+            "str", "", "Report", "Report time zone",
+            "IANA time zone for the times on receipts and reports, e.g. America/Phoenix. "
+            "Blank = the server's time."),
+        "forecast_demand": shared("forecast_demand"),
+    }
+
+
+MANIFESTS["app3"] = {
+    "app_key": "app3",
+    "name": "Aggregate Anxiety V3",
+    "schema_version": 1,
+    "params": _app3_params(),
+}
+
+
 def get_manifest(app_key):
     return MANIFESTS.get(app_key)
 

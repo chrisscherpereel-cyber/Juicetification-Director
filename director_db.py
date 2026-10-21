@@ -39,6 +39,9 @@ APPS_SEED = [
     # key works on an already-initialised database (the INSERT below is ON CONFLICT DO NOTHING,
     # which would silently skip an edit to an existing row).
     ("toc3", "Capacity Crush V3", "https://juicetification-capacity-crush-v3.streamlit.app"),
+    # Aggregate Anxiety V3 (Excel edition): a separate entry for the same reason as toc3.
+    ("app3", "Aggregate Anxiety V3",
+     "https://juicetification-aggregate-anxiety-v3.streamlit.app"),
 ]
 
 
